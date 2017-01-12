@@ -171,7 +171,38 @@
 
 ! Temporary for debugging forces
         real etot_previous
+!*********************JUST FOR TESTTING****************
+        real prho_in_shell               !< temporary storage
+        real prho_bond_shell             !< temporary storage
+        real poverlap                    !< temporary stroage
+        real prho_in                     !< temporary storage
+        real prho_in_bef
+        real muxc_in_bef
+        real prho_in_shell_beff
+        real prho_bond                   !< temporary storage
+        real dexc_in, dexc_bond          !< 1st derivative of xc energy
+        real d2exc_in, d2exc_bond        !< 2nd derivative of xc energy
+        real dmuxc_in, dmuxc_bond        !< 1st derivative of xc potential
+        real exc_in, exc_bond            !< xc energy
+        real muxc_in, muxc_bond          !< xc potential_
+        real d2muxc_in, d2muxc_bond      !< 2nd derivative of xc potential
+        real, dimension (3) :: Dprho_in_shell
 
+        real, dimension (3) :: r1, r2
+        integer ineigh, num_neigh
+        real dens
+        integer norb_mu, norb_nu, mbeta, jatom, in2
+        real, dimension (4, 4) :: bcnam
+        real, dimension (4, 4) :: bcnam_beff
+        real, dimension (4, 4) :: dbcnam
+
+        interface
+          function distance (a, b)
+            real distance
+            real, intent (in), dimension (3) :: a, b
+          end function distance
+        end interface
+!*********************JUST FOR TESTTING****************
 ! Allocate Arrays
 ! ===========================================================================
 ! None
@@ -190,7 +221,6 @@
         iseparate = 1
         open (unit = ilogfile, file = 'output.log', status = 'replace')
         call welcome_fireball
-
 ! ===========================================================================
 ! ---------------------------------------------------------------------------
 !             R E A D   I N   S Y S T E M   I N F O R M A T I O N
@@ -221,8 +251,8 @@
         write (ilogfile,*)
 
         ! file_exists will be TRUE if the file
-        INQUIRE(FILE="structures.inp", EXIST=file_exists)   
-                                                            
+        INQUIRE(FILE="structures.inp", EXIST=file_exists)
+
         ! exists and FALSE otherwise
         if ( file_exists ) then
            open (unit = 1, file = 'structures.inp', status = 'old')
@@ -254,7 +284,22 @@
 ! is modified to take s as a parameter, rather than reference s directly
 !$omp parallel do private (s, slogfile, sigma, iscf_iteration, timei, timef) &
 !$omp             private (ebs, uii_uee, uxcdcc, etot)
+!**********JUST TESTING***********
+        muxc_in_bef = 0.0d0
+        prho_in_shell_beff = 0.0d0
+!*******************************just for testing*********************
+              !s => structures(1)
+              !in1 = s%atom(1)%imass
+              !norb_mu = species(in1)%norb_max
+              !jatom = s%neighbors(1)%neigh_j(2)
+              !in2 = s%atom(jatom)%imass
+              !norb_nu = species(in2)%norb_max
+              bcnam = 0.0d0
+              bcnam_beff = 0.0d0
+              dbcnam = 0.0d0
+!*******************************just for testing*********************
         do istructure = 1, nstructures
+        print *, 'structure->', istructure
           s => structures(istructure)
           read (1, *) s%basisfile
           if (iseparate .eq. 1) then
@@ -275,11 +320,9 @@
 
           ! Read in the coordinates and parameters
           call read_positions (s)
-
           ! Set the charges for istructure
           call read_charges (s)
           call set_constraints (s)
-
 ! Molecular-dynamics loop
 ! ---------------------------------------------------------------------------
 ! ===========================================================================
@@ -407,11 +450,51 @@
             call Dassemble_rho_2c (s)
             call Dassemble_vxc (s)
             call Dassemble_ewaldsr (s)
+            call Dassemble_ewaldlr (s)
 
             write (s%logfile,*) ' Three-center non-charge dependent Dassemblers.'
             call Dassemble_vna_3c (s)
             call Dassemble_vxc_3c (s)
+!******************just for testining****************
 
+
+              r1 = s%atom(1)%ratom
+              in1 = s%atom(1)%imass
+              norb_mu = species(in1)%norb_max
+              mbeta = s%neighbors(1)%neigh_b(2)
+              jatom = s%neighbors(1)%neigh_j(2)
+              r2 = s%atom(jatom)%ratom + s%xl(mbeta)%a
+              in2 = s%atom(jatom)%imass
+              norb_nu = species(in1)%norb_max
+              call getDMEs_Fdata_2c (in1, in2, 5, 0, distance (r1, r2),          &
+     &                             norb_mu, norb_nu, bcnam, dbcnam)
+              !print *, ((bcnam - bcnam_beff)/0.005022 - dbcnam)
+              bcnam_beff= bcnam
+
+     !       prho_in_shell = s%rho_bond_weighted(1)%neighbors(2)%block(1,1)
+     !       Dprho_in_shell=                                    &
+     !&           s%rho_bond_weighted(1)%neighbors(2)%Dblock(:,1,1)
+     !       call lda_ceperley_alder (prho_in_shell, exc_in, muxc_in,  &
+     !&                                      dexc_in, d2exc_in, dmuxc_in, d2muxc_in)
+
+     !       print *, (muxc_in- muxc_in_bef)/ (prho_in_shell- prho_in_shell_beff), dmuxc_in
+
+
+     !       muxc_in_bef = muxc_in
+     !       print *, (prho_in_shell - prho_in_shell_beff)/0.005022, (Dprho_in_shell(1)**2 &
+     !       & + Dprho_in_shell(2)**2 + Dprho_in_shell(3)**2)**0.5
+     !       prho_in_shell_beff = prho_in_shell
+            !print *, 'rc', s%rcm
+            !do iatom = 1, s%natoms
+              !print *, 'rc', s%rcm
+              !print *, 'iatom->', s%atom(iatom)%ratom
+
+              !num_neigh = s%neighbors(iatom)%neighn
+              !do ineigh = 1, num_neigh
+                !print *, 'ineigh->', s%atom(ineigh)%ratom
+              !end do
+            !end do
+!********************END OF JUST FOR TESTING************
 ! short-range interactions (double-counting interactions)
             call Dassemble_uee (s)
             call Dassemble_uxc (s)
@@ -425,7 +508,7 @@
               write (s%logfile, 512)  iatom, s%forces(iatom)%ftot
             end do
             call md (s, itime_step)
-            
+
 ! Output the coordinates to a .xyz file
             slogfile = s%basisfile(:len(trim(s%basisfile))-4)
             slogfile = trim(slogfile)//'.xyz'
